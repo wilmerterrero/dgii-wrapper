@@ -1,38 +1,48 @@
-var phantom = require("phantom");
+const phantom = require("phantom");
+const timeoutPromise = require("../utils/timeoutPromise");
 
-var url =
+const url =
   "https://dgii.gov.do/app/WebApps/ConsultasWeb2/ConsultasWeb/consultas/ncf.aspx";
 
-// A promise to wait for n of milliseconds
-const timeout = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function checkNCF(rnc, ncf) {
+  // prevent empty values
+  if (!rnc || !ncf) return;
 
-(async function () {
+  // phanthom config
   const instance = await phantom.create();
   const page = await instance.createPage();
 
-  await page.on("onResourceRequested", function (requestData) {
-    console.info("Requesting", requestData.url);
-  });
-  await page.on("onConsoleMessage", function (msg) {
-    console.info(msg);
-  });
+  /* ----------------------------logs-------------------------------- */
+  // await page.on("onResourceRequested", function (requestData) {
+  //   console.info("Requesting", requestData.url);
+  // });
+  // await page.on("onConsoleMessage", function (msg) {
+  //   console.info(msg);
+  // });
+  /* ----------------------------logs-------------------------------- */
 
-  const status = await page.open(url);
-  await console.log("STATUS:", status);
+  await page.open(url);
 
-  // // submit
-  await page.evaluate(function () {
-    document.getElementById("cphMain_txtRNC").value = "401037272"; //RNC
-    document.getElementById("cphMain_txtNCF").value = "B0216007680"; //NCF
-    document.getElementById("cphMain_btnConsultar").click(); // click submit button
-  });
+  /* ----------------------------Submit values-------------------------------- */
+  await page.evaluate(
+    function (rnc, ncf) {
+      document.getElementById("cphMain_txtRNC").value = rnc; //RNC
+      document.getElementById("cphMain_txtNCF").value = ncf; //NCF
+      document.getElementById("cphMain_btnConsultar").click(); // click submit button
+    },
+    rnc, // passing arguments from params
+    ncf
+  );
+  /* ----------------------------Submit values-------------------------------- */
 
-  console.log("Waiting 1.5 seconds..");
-  await timeout(1500);
+  await timeoutPromise(1500);
 
-  // // Get only the table contents
+  // Get only the table contents
   const result = await page.evaluate(function () {
-    // The results are in cphMain_pResultado
+    // performance begin
+    const perf1 = window.performance.now();
+
+    /* ----------------------------Results-------------------------------- */
     const rnc = document.getElementById("cphMain_lblRncCedula").innerText;
     const razonSocial = document.getElementById(
       "cphMain_lblRazonSocial"
@@ -43,7 +53,13 @@ const timeout = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const ncf = document.getElementById("cphMain_lblNCF").innerText;
     const estado = document.getElementById("cphMain_lblEstado").innerText;
     const vigencia = document.getElementById("cphMain_lblVigencia").innerText;
+    /* ----------------------------Results-------------------------------- */
+
+    // performance end
+    const perf2 = window.performance.now();
+
     const data = {
+      timeRequested: perf2 - perf1,
       rnc: rnc,
       razonSocial: razonSocial,
       tipoComprobante: tipoComprobante,
@@ -57,5 +73,7 @@ const timeout = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   await instance.exit();
 
-  console.log(result);
-})();
+  return result;
+}
+
+module.exports = checkNCF;
